@@ -12,3 +12,9 @@ where the central hex has the position `0`, and further hexes are placed within 
 that surround it.
 
 <p align="center"><img src="https://i.imgur.com/WzFffuV.png"></p>
+
+## TODO
+
+- [ ] add conversion from hex position to window/screen coordinates
+- [ ] add conversion from window/screen coordinates to hex position
+- [ ] revise the APIs and data types
