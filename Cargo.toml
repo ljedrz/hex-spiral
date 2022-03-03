@@ -11,4 +11,5 @@ categories = ["game-development", "visualization"]
 keywords = ["coordinate", "game", "hex", "hexagonal"]
 
 [dependencies]
+crepe = "0.1"
 itertools = "0.10"

@@ -5,12 +5,25 @@
 
 use itertools::Itertools;
 
-pub type Position = usize;
+pub type Pos = usize;
+pub type RingIdx = usize;
 
-type Ring = usize;
+crepe::crepe! {
+    @input
+    struct Position(Pos);
+
+    struct Neighbors(Pos, Pos);
+
+    @output
+    struct Grouped(Pos, Pos);
+
+    Neighbors(p1, p2) <- Position(p1), Position(p2), (are_neighbors(p1, p2));
+    Grouped(p1, p2) <- Neighbors(p1, p2);
+    Grouped(p1, p3) <- Neighbors(p1, p2), Grouped(p2, p3), (p1 != p3);
+}
 
 /// The starting position of hexes within the ring with the given index.
-pub fn ring_offset(ring: Ring) -> Position {
+pub fn ring_offset(ring: RingIdx) -> Pos {
     if ring == 0 {
         0
     } else {
@@ -19,7 +32,7 @@ pub fn ring_offset(ring: Ring) -> Position {
 }
 
 /// The index of the ring for the given position.
-pub fn ring(pos: Position) -> Ring {
+pub fn ring(pos: Pos) -> RingIdx {
     (0..)
         .map(ring_offset)
         .position(|offset| pos < offset)
@@ -28,7 +41,7 @@ pub fn ring(pos: Position) -> Ring {
 }
 
 /// Returns `true` if the given position is at one of the tips of a ring.
-pub fn is_at_ring_tip(pos: Position) -> bool {
+pub fn is_at_ring_tip(pos: Pos) -> bool {
     let ring = ring(pos);
     let ring_offset = ring_offset(ring);
 
@@ -37,10 +50,8 @@ pub fn is_at_ring_tip(pos: Position) -> bool {
         .any(|ring_tip| pos == ring_tip)
 }
 
-/// Returns the index of the tip of the ring the given position belongs to.
-pub fn ring_tip_index(pos: Position) -> usize {
-    assert!(is_at_ring_tip(pos));
-
+/// Returns the index of the edge of the ring the given position belongs to.
+pub fn ring_edge_index(pos: Pos) -> usize {
     let ring = ring(pos);
     (pos - ring_offset(ring)) / ring
 }
@@ -48,26 +59,26 @@ pub fn ring_tip_index(pos: Position) -> usize {
 /// An iterator returning subsequent neighboring positions in the given direction.
 /// The top direction is `0`, and it increases up to `5` clockwise.
 pub struct DirectionalNeighborIter {
-    curr_pos: Position,
+    curr_pos: Pos,
     dir: usize,
 }
 
 impl DirectionalNeighborIter {
     /// Create a new `DirectionalNeighborIter` starting at the given position
     /// and progressing in the chosen direction.
-    pub fn new(pos: Position, dir: usize) -> Self {
+    pub fn new(pos: Pos, dir: usize) -> Self {
         assert!(dir <= 5);
         Self { curr_pos: pos, dir }
     }
 
     /// Returns the position the `DirectionalNeighborIter` is currently at.
-    pub fn curr_pos(&self) -> Position {
+    pub fn curr_pos(&self) -> Pos {
         self.curr_pos
     }
 }
 
 impl Iterator for DirectionalNeighborIter {
-    type Item = Position;
+    type Item = Pos;
 
     fn next(&mut self) -> Option<Self::Item> {
         let next = neighboring_positions(self.curr_pos)[self.dir];
@@ -76,15 +87,7 @@ impl Iterator for DirectionalNeighborIter {
     }
 }
 
-/// Returns the index of the edge of the ring the given position belongs to.
-pub fn ring_edge_index(pos: Position) -> usize {
-    assert!(!is_at_ring_tip(pos));
-
-    let ring = ring(pos);
-    (pos - ring_offset(ring)) / ring
-}
-
-fn ring_neighboring_positions(pos: Position) -> [Position; 2] {
+fn ring_neighboring_positions(pos: Pos) -> [Pos; 2] {
     assert!(pos != 0);
 
     let ring = ring(pos);
@@ -99,38 +102,35 @@ fn ring_neighboring_positions(pos: Position) -> [Position; 2] {
 }
 
 /// Returns the 6 neighbors of the given position, always in the same clockwise order.
-pub fn neighboring_positions(pos: Position) -> [Position; 6] {
+pub fn neighboring_positions(pos: Pos) -> [Pos; 6] {
     let ring = ring(pos);
 
     match ring {
         0 => [1, 2, 3, 4, 5, 6],
         _ => {
-            if is_at_ring_tip(pos) {
+            let edge_index = ring_edge_index(pos);
+
+            let mut poss = if is_at_ring_tip(pos) {
                 // 1 neighbor from the lower ring, 3 from the upper ring, 2 from the same ring
-                let tip_index = ring_tip_index(pos);
-                let lower_neighbor = ring_offset(ring - 1) + (ring - 1) * tip_index;
+                let lower_neighbor = ring_offset(ring - 1) + (ring - 1) * edge_index;
                 let ring_neighbors = ring_neighboring_positions(pos);
                 let upper_tip_neighbor = if pos == ring_offset(ring + 1) - 1 {
                     ring_offset(ring + 2) - 2
                 } else {
-                    ring_offset(ring + 1) + (ring + 1) * tip_index
+                    ring_offset(ring + 1) + (ring + 1) * edge_index
                 };
                 let upper_tip_neighbors = ring_neighboring_positions(upper_tip_neighbor);
 
-                let mut poss = [
+                [
                     upper_tip_neighbor,
                     upper_tip_neighbors[1],
                     ring_neighbors[1],
                     lower_neighbor,
                     ring_neighbors[0],
                     upper_tip_neighbors[0],
-                ];
-                poss.rotate_right(tip_index);
-
-                poss
+                ]
             } else {
                 // 2 neighbors from the lower ring, the upper ring, and the same ring
-                let edge_index = ring_edge_index(pos);
                 let ring_pos = pos - ring_offset(ring);
                 let tip_offset = ring_pos - (edge_index * ring);
                 let (lower_neighbor1, lower_neighbor2) = if pos == ring_offset(ring + 1) - 1 {
@@ -145,29 +145,30 @@ pub fn neighboring_positions(pos: Position) -> [Position; 6] {
                     ring_offset(ring + 1) + (edge_index * (ring + 1)) + tip_offset;
                 let upper_neighbor2 = upper_neighbor1 + 1;
 
-                let mut poss = [
+                [
                     upper_neighbor1,
                     upper_neighbor2,
                     ring_neighbors[1],
                     lower_neighbor2,
                     lower_neighbor1,
                     ring_neighbors[0],
-                ];
-                poss.rotate_right(edge_index);
+                ]
+            };
 
-                poss
-            }
+            poss.rotate_right(edge_index);
+
+            poss
         }
     }
 }
 
 /// Returns `true` if the given 2 positions are neighbors.
-pub fn are_neighbors(pos1: Position, pos2: Position) -> bool {
+pub fn are_neighbors(pos1: Pos, pos2: Pos) -> bool {
     neighboring_positions(pos1).contains(&pos2)
 }
 
 /// Returns `true` if the given list of positions consists of subsequent neighbors.
-pub fn is_path_consistent(poss: &[Position]) -> bool {
+pub fn is_path_consistent(poss: &[Pos]) -> bool {
     assert!(poss.len() >= 2);
 
     poss.windows(2).all(|pair| {
@@ -179,59 +180,20 @@ pub fn is_path_consistent(poss: &[Position]) -> bool {
     })
 }
 
-fn are_grouped_inner(poss: &[Position], num_cycles: usize) -> bool {
-    assert!(!poss.is_empty());
+pub fn are_grouped(poss: &[Pos]) -> bool {
+    let mut rt = Crepe::new();
+    rt.extend(poss.iter().copied().map(Position));
+    let (groups,) = rt.run();
 
-    if poss.len() == 1 {
-        return true;
-    }
-
-    if poss.len() == 2 {
-        return are_neighbors(poss[0], poss[1]);
-    }
-
-    let mut stack = poss.to_owned();
-    let pos = stack.remove(0);
-
-    // collect its neighbors
-    let neighboring_positions = stack
-        .iter()
-        .positions(|p| are_neighbors(pos, *p))
-        .collect::<Vec<_>>();
-
-    // no neighbors? bail
-    if neighboring_positions.is_empty() {
-        return false;
-    }
-
-    if neighboring_positions.len() == 1 {
-        if stack.len() >= 2 {
-            are_grouped(&stack)
-        } else {
-            false
-        }
-    } else if neighboring_positions.len() == stack.len() {
-        true
-    } else {
-        let cycles = num_cycles + 1;
-        if cycles == poss.len() {
-            true
-        } else {
-            // cycle the stack, hoping to find a position with just 1 neighbor next time
-            stack.push(pos);
-            are_grouped_inner(&stack, cycles)
-        }
-    }
-}
-
-/// Returns `true` if all the members of the given list of positions belong to a single group; in other
-/// words, one can get from any of the positions to any other one by going thorugh the others.
-pub fn are_grouped(poss: &[Position]) -> bool {
-    are_grouped_inner(poss, 0)
+    poss.iter()
+        .permutations(2)
+        .all(|pair| groups.contains(&Grouped(*pair[0], *pair[1])))
 }
 
 #[cfg(test)]
 mod tests {
+    use itertools::Itertools;
+
     use super::*;
 
     #[test]
@@ -372,7 +334,6 @@ mod tests {
             .into_iter()
             .permutations(3)
             .all(|perm| are_grouped(&perm)));
-        /* those work, but take a long time
         assert!([71, 45, 25, 24, 23, 22, 41, 66]
             .into_iter()
             .permutations(8)
@@ -381,8 +342,6 @@ mod tests {
             .into_iter()
             .permutations(7)
             .all(|perm| are_grouped(&perm)));
-        */
-
         assert!([5, 17, 18]
             .into_iter()
             .permutations(3)
@@ -397,6 +356,12 @@ mod tests {
             .all(|perm| !are_grouped(&perm)));
 
         assert!(are_grouped(&[11, 10, 2, 1, 6, 5, 15, 30, 29, 28, 27, 26]));
+        assert!(!are_grouped(&[
+            1, 2, 3, 4, 5, 16, 17, 35, 36, 20, 21, 22, 23, 24, 25, 26
+        ]));
+        assert!(are_grouped(&[
+            1, 2, 3, 4, 5, 16, 17, 35, 36, 19, 20, 21, 22, 23, 24, 25, 26
+        ]));
     }
 
     #[test]
