@@ -1,7 +1,8 @@
-/// Converts spiral coordinates to and from cube (q,r,s) coordinates
+//! Convert spiral coordinates to and from cube (q, r, s) coordinates.
+
 use crate::position::{ring, ring_offset};
 
-/// Cube coordinate system for hex grid
+/// Cube coordinate system for hex grid.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Cube {
     q: i32,
@@ -14,12 +15,15 @@ impl Cube {
         Cube { q, r, s }
     }
 
-    // Find largest absolute value of cube coordinate components
-    fn abs_largest(&self) -> Option<i32> {
-        [self.q.abs(), self.r.abs(), self.s.abs()].into_iter().max()
+    // Find the largest absolute value of cube coordinate components.
+    fn abs_largest(&self) -> i32 {
+        [self.q.abs(), self.r.abs(), self.s.abs()]
+            .into_iter()
+            .max()
+            .unwrap()
     }
 
-    // Find sum of cube coordinate components
+    // Find the sum of cube coordinate components.
     fn component_sum(&self) -> i32 {
         self.q + self.r + self.s
     }
@@ -34,46 +38,43 @@ pub fn spiral_to_cube(x: usize) -> Cube {
         return Cube::default();
     }
 
-    // Find the ring number and ring-offset for this spiral
-    let ring_number = ring(x) as f32;
-    let ring_offset = ring_offset(ring_number as usize) as f32;
+    // Find the ring index and ring-offset for this spiral
+    let ring_index = ring(x) as f32;
+    let ring_offset = ring_offset(ring_index as usize) as f32;
 
     // Calculate q and r
-    let q = growing_trunc_tri(x as f32, ring_number, ring_offset, 0.0);
-    let r = growing_trunc_tri(x as f32, ring_number, ring_offset, 4.0);
+    let q = growing_trunc_tri(x as f32, ring_index, ring_offset, 0.0);
+    let r = growing_trunc_tri(x as f32, ring_index, ring_offset, 4.0);
 
     // Could alternatively manually calculate s as:
-    // let s = growing_trunc_tri(x, ring_offset, p, ring_number, -4.0);
+    // let s = growing_trunc_tri(x, ring_offset, p, ring_index, -4.0);
     let s = -q - r;
 
     Cube::new(q, r, s)
 }
 
-/// Calculate a spiral hex coordinate for an input (q,r,s) in cube coordinates
+/// Calculate a spiral hex coordinate for an input (q,r,s) in cube coordinates.
 pub fn cube_to_spiral(coord: Cube) -> Result<usize, &'static str> {
-    // The origin is a special case, return 0
+    // The origin is a special case, return 0.
     if coord == Cube::default() {
         return Ok(0);
     }
 
     // Make sure we've been passed a valid cube coordinate. The components should sum to 0.
     if coord.component_sum() != 0 {
-        return Err("q+r+s!=0");
+        return Err("q + r + s != 0");
     }
 
-    // Find the ring number based on the maximum absolute value of q,r or s
-    let ring_number = match coord.abs_largest() {
-        Some(value) => value as usize,
-        None => return Err("Couldn't find ring number."),
-    };
+    // Find the ring index based on the maximum absolute value of q, r or s.
+    let ring_index = coord.abs_largest() as usize;
 
-    let ring_offset = ring_offset(ring_number);
+    let ring_offset = ring_offset(ring_index);
 
     // We now know approximately where we are in the truncated triangle wave.
-    // If we start at x= ring_offset and calculate q,r,s values from this point up to
-    // x= (ring_offset + ring_number*6), we should find matching q,r,s values for some value of x.
+    // If we start at x = ring_offset and calculate q,r,s values from this point up to
+    // x = (ring_offset + ring_index * 6), we should find matching q, r, s values for some value of x.
 
-    let x = ring_offset..(ring_offset + ring_number * 6);
+    let x = ring_offset..(ring_offset + ring_index * 6);
 
     match x
         .into_iter()
@@ -115,7 +116,7 @@ fn growing_trunc_tri(x: f32, c: f32, x_prime: f32, phi: f32) -> i32 {
     }
 }
 
-/// In Rust, a%b finds the remainder of a/b. This function finds the actual modulo (not the remainder) of a and b
+/// In Rust, a % b finds the remainder of a / b. This function finds the actual modulo (not the remainder) of a and b.
 fn modulo<T: std::ops::Rem<Output = T> + std::ops::Add<Output = T> + Copy>(a: T, b: T) -> T {
     ((a % b) + b) % b
 }
@@ -162,6 +163,6 @@ mod tests {
     #[test]
     fn convert_invalid_qrs() {
         // An invalid set of cube coords
-        assert_eq!(Err("q+r+s!=0"), cube_to_spiral(Cube::new(-1, -1, 0)),)
+        assert_eq!(Err("q + r + s != 0"), cube_to_spiral(Cube::new(-1, -1, 0)),)
     }
 }
