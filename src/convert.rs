@@ -110,7 +110,7 @@ fn growing_trunc_tri(x: f32, c: f32, x_prime: f32, phi: f32) -> i32 {
     let y_1 = 6.0 / p * (modulo(s, p_star) - c * p / 2.0).abs() - 1.5 * (c);
 
     // We now truncate the wave so that it never has an amplitude greater than the cycle number
-    match y_1 > c {
+    match y_1.abs() > c {
         true => (y_1.signum() * c) as i32,
         false => y_1 as i32,
     }
@@ -127,7 +127,7 @@ mod tests {
     #[test]
     fn convert_spiral_to_cube() {
         // Test a few input values in spiral coordinates
-        let spiral_vals: Vec<usize> = vec![0, 1, 4, 7, 45];
+        let spiral_vals: Vec<usize> = vec![0, 1, 4, 7, 8, 45];
 
         // Try find their cube coords
         let result = spiral_vals
@@ -136,7 +136,7 @@ mod tests {
             .collect::<Vec<Cube>>();
 
         // This is the result we expect to get
-        let expected = [(0, 0, 0), (0, -1, 1), (0, 1, -1), (0, -2, 2), (4, 0, -4)]
+        let expected = [(0, 0, 0), (0, -1, 1), (0, 1, -1), (0, -2, 2), (1,-2,1), (4, 0, -4)]
             .into_iter()
             .map(|(q, r, s)| Cube::new(q, r, s))
             .collect::<Vec<Cube>>();
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn convert_cube_to_spiral() {
         // Test a few input values in cube coordinates
-        let cube = [(0, 0, 0), (0, -1, 1), (0, 1, -1), (0, -2, 2), (4, 0, -4)]
+        let cube = [(0, 0, 0), (0, -1, 1), (0, 1, -1), (0, -2, 2), (1,-2,1), (4, 0, -4)]
             .into_iter()
             .map(|(q, r, s)| Cube::new(q, r, s));
 
@@ -157,7 +157,7 @@ mod tests {
             .map(|c| cube_to_spiral(c).unwrap())
             .collect::<Vec<usize>>();
 
-        assert_eq!(vec![0, 1, 4, 7, 45], result);
+        assert_eq!(vec![0, 1, 4, 7, 8, 45], result);
     }
 
     #[test]
@@ -166,3 +166,4 @@ mod tests {
         assert_eq!(Err("q + r + s != 0"), cube_to_spiral(Cube::new(-1, -1, 0)),)
     }
 }
+
